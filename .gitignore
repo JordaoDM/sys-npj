@@ -1,0 +1,49 @@
+# Dependências
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+*.tgz
+*.tar.gz
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# Arquivos temporários
+tmp/
+temp/
+
+# Uploads
+uploads/
+
+# Database
+*.db
+*.sqlite
+
+# Coverage reports
+coverage/
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Certificados
+*.pem
+*.key
+*.crt

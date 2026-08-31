@@ -1,0 +1,61 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "migrate": "node scripts/migrate.js up",
+    "migrate:check": "node scripts/migrate.js check",
+    "admin:create": "node utils/createAdmin.js",
+    "setup": "npm run migrate && npm run admin:create",
+    "setup-calendar": "node scripts/setup-npj-calendar-env.js",
+    "test": "node scripts/prepareApiTestDatabase.js && jest --runInBand",
+    "test:watch": "node scripts/prepareApiTestDatabase.js && jest --watch",
+    "test:coverage": "node scripts/prepareApiTestDatabase.js && jest --runInBand --coverage",
+    "test:unit": "jest tests/unit/ --runInBand --coverage=false",
+    "test:integration": "npm run test:api",
+    "test:api": "node scripts/prepareApiTestDatabase.js && jest tests/api --runInBand --coverage=false",
+    "test:agendamentos": "npm run test:api -- --testNamePattern=Agendamentos",
+    "test:verbose": "node scripts/prepareApiTestDatabase.js && jest --runInBand --verbose",
+    "test:silent": "node scripts/prepareApiTestDatabase.js && jest --runInBand --silent"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.2",
+    "chokidar": "^4.0.3",
+    "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^7.1.5",
+    "express-slow-down": "^2.0.1",
+    "express-validator": "^7.2.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "migrate": "^2.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.1",
+    "mysql2": "^3.14.2",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.10.1",
+    "sequelize": "^6.37.7",
+    "sqlite3": "^5.1.7"
+  },
+  "keywords": [],
+  "author": "Sistema NPJ",
+  "license": "MIT",
+  "description": "API do Sistema de Gestão do Núcleo de Prática Jurídica",
+  "engines": {
+    "node": ">=24.19.0 <25",
+    "npm": ">=11"
+  },
+  "devDependencies": {
+    "jest": "^30.0.4",
+    "nodemon": "^3.1.10",
+    "sequelize-cli": "^6.6.3",
+    "supertest": "^7.1.3"
+  }
+}

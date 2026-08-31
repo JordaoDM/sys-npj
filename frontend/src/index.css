@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Inter", Arial, Helvetica, sans-serif;
+  background: #f7f7f7;
+  color: #222;
+}
+
+.auth-layout {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e0e7ef;
+}
+
+.main-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background: #1976d2;
+  color: #fff;
+  padding: 18px 32px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  box-shadow: 0 2px 8px #0001;
+}
+
+.sidebar {
+  width: 220px;
+  background: #f3f9ff;
+  border-right: 1px solid #d6e4f0;
+  min-height: 100vh;
+  padding: 24px 0 0 0;
+  position: relative;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0 0 0 24px;
+  margin: 0;
+}
+
+.sidebar li {
+  margin-bottom: 18px;
+}
+
+.sidebar a {
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.sidebar a:hover {
+  text-decoration: underline;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+}
+
+.page-content {
+  flex: 1;
+  padding: 32px 48px;
+}
+
+.loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  font-size: 1.2rem;
+  color: #1976d2;
+}
+
+button {
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+button:disabled {
+  background: #a7b8cc;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  background: #145ea8;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid #cfd8dc;
+  border-radius: 4px;
+  padding: 7px 12px;
+  margin-bottom: 12px;
+  font-size: 1em;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 2px #1976d2;
+}
+
+.success {
+  color: #2ecc40;
+}
+.error {
+  color: #ff4136;
+}
+.info {
+  color: #0074d9;
+}
+.warning {
+  color: #ffdc00;
+}

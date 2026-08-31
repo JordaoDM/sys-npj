@@ -1,0 +1,36 @@
+{
+  "testEnvironment": "node",
+  "collectCoverageFrom": [
+    "controllers/**/*.js",
+    "models/**/*.js",
+    "services/**/*.js",
+    "middleware/**/*.js",
+    "utils/**/*.js",
+    "!**/node_modules/**",
+    "!coverage/**",
+    "!migrations/**",
+    "!tests/**",
+    "!**/*.backup.js"
+  ],
+  "coverageDirectory": "coverage",
+  "coverageReporters": ["text", "lcov", "html"],
+  "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"],
+  "testMatch": [
+    "**/tests/**/*.spec.js",
+    "**/tests/**/*.test.js"
+  ],
+  "testPathIgnorePatterns": [
+    "/node_modules/"
+  ],
+  "testTimeout": 30000,
+  "verbose": true,
+  "collectCoverage": true,
+  "coverageThreshold": {
+    "global": {
+      "branches": 35,
+      "functions": 40,
+      "lines": 45,
+      "statements": 45
+    }
+  }
+}
