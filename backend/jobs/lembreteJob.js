@@ -1,6 +1,11 @@
 const cron = require('node-cron');
+const { Op } = require('sequelize');
 const Agendamento = require('../models/agendamentoModel');
+const Usuario = require('../models/usuarioModel');
+const Processo = require('../models/processoModel');
 const emailService = require('../services/emailService');
+
+const TIMEZONE = process.env.TZ || 'America/Cuiaba';
 
 class LembreteJob {
   constructor() {
@@ -9,152 +14,124 @@ class LembreteJob {
   }
 
   iniciar() {
-    console.log(' Iniciando job automático de lembretes de agendamentos...');
-    
-    this.job = cron.schedule('0 0 */1 * * *', async () => {
-      if (this.isRunning) {
-        console.log(' Job de lembretes já está em execução, pulando...');
-        return;
-      }
-
-      await this.executarLembretes();
-      await this.verificarConvitesExpirados();
-    }, {
+    console.log(' Iniciando job unificado de lembretes de agendamentos...');
+    this.job = cron.schedule('*/15 * * * *', () => this.executar(), {
       scheduled: true,
-      timezone: 'America/Cuiaba'
+      timezone: TIMEZONE
     });
-
-    console.log(' Job de lembretes iniciado com sucesso (executa a cada 1 hora)');
+    console.log(` Job unificado de lembretes iniciado (a cada 15 minutos, fuso ${TIMEZONE})`);
   }
 
-  async testarManual() {
-    console.log(' Executando teste manual do job de lembretes...');
-    await this.executarLembretes();
+  async executar(agora = new Date()) {
+    if (this.isRunning) {
+      console.log(' Job de lembretes já está em execução, pulando...');
+      return;
+    }
+
+    this.isRunning = true;
+    try {
+      await this.enviarLembretes24Horas(agora);
+      await this.enviarLembretesDoDia(agora);
+      await this.enviarLembretes1Hora(agora);
+      await this.verificarConvitesExpirados(agora);
+    } catch (error) {
+      console.error(' Erro geral no job unificado de lembretes:', error);
+    } finally {
+      this.isRunning = false;
+    }
+  }
+
+  includesParticipantes() {
+    return [
+      { model: Processo, as: 'processo', attributes: ['id', 'numero_processo', 'titulo'], required: false },
+      { model: Usuario, as: 'usuario', attributes: ['id', 'nome', 'email'], required: false }
+    ];
+  }
+
+  obterDestinatarios(agendamento) {
+    const destinatarios = new Map();
+    const adicionar = (email, nome) => {
+      const normalizado = email?.trim().toLowerCase();
+      if (normalizado && !destinatarios.has(normalizado)) {
+        destinatarios.set(normalizado, { email: normalizado, nome: nome || 'Participante' });
+      }
+    };
+
+    adicionar(agendamento.usuario?.email, agendamento.usuario?.nome);
+    adicionar(agendamento.email_lembrete, 'Participante');
+    if (Array.isArray(agendamento.convidados)) {
+      agendamento.convidados
+        .filter((convidado) => convidado.status === 'aceito')
+        .forEach((convidado) => adicionar(convidado.email, convidado.nome || 'Convidado'));
+    }
+    return [...destinatarios.values()];
+  }
+
+  async enviarParaParticipantes(agendamento) {
+    const destinatarios = this.obterDestinatarios(agendamento);
+    for (const destinatario of destinatarios) {
+      await emailService.enviarLembreteAgendamento(
+        agendamento,
+        destinatario.email,
+        destinatario.nome
+      );
+    }
+    return destinatarios.length;
+  }
+
+  async processarAgendamentos(where, campoControle, descricao) {
+    const agendamentos = await Agendamento.findAll({
+      where: { status: 'marcado', ...where, [campoControle]: false },
+      include: this.includesParticipantes()
+    });
+
+    for (const agendamento of agendamentos) {
+      try {
+        const total = await this.enviarParaParticipantes(agendamento);
+        if (total > 0) {
+          agendamento[campoControle] = true;
+          await agendamento.save();
+          console.log(` ${descricao} enviado para ${total} destinatário(s), agendamento ${agendamento.id}`);
+        }
+      } catch (error) {
+        console.error(` Erro ao enviar ${descricao} do agendamento ${agendamento.id}:`, error.message);
+      }
+    }
+  }
+
+  async enviarLembretes24Horas(agora = new Date()) {
+    const limite = new Date(agora.getTime() + 24 * 60 * 60 * 1000);
+    await this.processarAgendamentos({
+      data_inicio: { [Op.between]: [agora, limite] }
+    }, 'lembrete_enviado', 'lembrete de 24 horas');
+  }
+
+  async enviarLembretesDoDia(agora = new Date()) {
+    if (agora.getHours() !== 8) return;
+    const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    const fimHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59, 999);
+    await this.processarAgendamentos({
+      data_inicio: { [Op.between]: [inicioHoje, fimHoje] }
+    }, 'lembrete_dia_enviado', 'lembrete do dia');
+  }
+
+  async enviarLembretes1Hora(agora = new Date()) {
+    const limite = new Date(agora.getTime() + 60 * 60 * 1000);
+    await this.processarAgendamentos({
+      data_inicio: { [Op.between]: [agora, limite] }
+    }, 'lembrete_1h_enviado', 'lembrete de 1 hora');
+  }
+
+  async testarManual(agora = new Date()) {
+    await this.executar(agora);
+  }
+
+  async executarManual(agora = new Date()) {
+    await this.executar(agora);
   }
 
   parar() {
-    if (this.job) {
-      this.job.stop();
-      console.log(' Job de lembretes parado');
-    }
-  }
-
-  async executarLembretes() {
-    this.isRunning = true;
-    console.log(' Iniciando execução de lembretes de agendamentos...');
-
-    try {
-      const agora = new Date();
-      const em24h = new Date(agora.getTime() + 24 * 60 * 60 * 1000);
-      
-      const { Op } = require('sequelize');
-      const Usuario = require('../models/usuarioModel');
-      const Processo = require('../models/processoModel');
-      
-      const agendamentos = await Agendamento.findAll({
-        where: {
-          data_inicio: {
-            [Op.between]: [agora, em24h]
-          },
-          lembrete_enviado: false,
-          status: {
-            [Op.in]: ['pendente', 'confirmado']
-          }
-        },
-        include: [
-          { 
-            model: Processo, 
-            as: 'processo', 
-            attributes: ['id', 'numero_processo', 'titulo'],
-            required: false
-          },
-          { 
-            model: Usuario, 
-            as: 'usuario', 
-            attributes: ['id', 'nome', 'email'],
-            required: false
-          }
-        ]
-      });
-      
-      if (agendamentos.length === 0) {
-        console.log(' Nenhum agendamento pendente de lembrete encontrado');
-        return;
-      }
-
-      console.log(` ${agendamentos.length} agendamento(s) encontrado(s) para envio de lembrete`);
-
-      let sucessos = 0;
-      let erros = 0;
-
-      for (const agendamento of agendamentos) {
-        try {
-          console.log(` Enviando lembrete para agendamento: ${agendamento.titulo} (ID: ${agendamento.id})`);
-          
-          let lembreteEnviado = false;
-          
-          if (agendamento.usuario && agendamento.usuario.email) {
-            await emailService.enviarLembreteAgendamento(
-              agendamento, 
-              agendamento.usuario.email, 
-              agendamento.usuario.nome
-            );
-            lembreteEnviado = true;
-          }
-          
-          if (agendamento.email_lembrete) {
-            await emailService.enviarLembreteAgendamento(
-              agendamento, 
-              agendamento.email_lembrete, 
-              'Participante'
-            );
-            lembreteEnviado = true;
-          }
-          
-          if (agendamento.convidados && Array.isArray(agendamento.convidados)) {
-            for (const convidado of agendamento.convidados) {
-              if (convidado.status === 'aceito' && convidado.email) {
-                await emailService.enviarLembreteAgendamento(
-                  agendamento, 
-                  convidado.email, 
-                  convidado.nome || 'Convidado'
-                );
-                lembreteEnviado = true;
-              }
-            }
-          }
-          
-          if (lembreteEnviado) {
-            agendamento.lembrete_enviado = true;
-            await agendamento.save();
-            sucessos++;
-            console.log(` Lembrete enviado com sucesso para agendamento ID: ${agendamento.id}`);
-          } else {
-            console.log(` Nenhum destinatário válido para agendamento ID: ${agendamento.id}`);
-          }
-          
-        } catch (error) {
-          erros++;
-          console.error(` Erro ao enviar lembrete para agendamento ID: ${agendamento.id}`, error.message);
-        }
-      }
-
-      console.log(`Resumo do job de lembretes:`);
-      console.log(`Sucessos: ${sucessos}`);
-      console.log(`Erros: ${erros}`);
-      console.log(`Total processados: ${agendamentos.length}`);
-
-    } catch (error) {
-      console.error('Erro geral no job de lembretes:', error);
-    } finally {
-      this.isRunning = false;
-      console.log('Execução de lembretes finalizada');
-    }
-  }
-
-  async executarManual() {
-    console.log(' Executando job de lembretes manualmente...');
-    await this.executarLembretes();
+    if (this.job) this.job.stop();
   }
 
   isJobRunning() {
@@ -163,45 +140,25 @@ class LembreteJob {
 
   getStatus() {
     return {
-      ativo: this.job ? this.job.running : false,
+      ativo: Boolean(this.job),
       executando: this.isRunning,
-      proximaExecucao: this.job ? this.job.nextDate() : null
+      proximaExecucao: this.job?.nextDate?.() || null
     };
   }
 
-  async verificarConvitesExpirados() {
-    try {
-      console.log(' Verificando convites expirados...');
-      
-      const agendamentos = await Agendamento.findAll({
-        where: {
-          status: 'enviando_convites',
-          data_convites_enviados: {
-            [require('sequelize').Op.not]: null
-          }
-        }
-      });
-
-      let processados = 0;
-      
-      for (const agendamento of agendamentos) {
-        const horasPassadas = (new Date() - new Date(agendamento.data_convites_enviados)) / (1000 * 60 * 60);
-        
-        if (horasPassadas >= 24) {
-          await agendamento.verificarAutoMarcacao();
-          processados++;
-          console.log(` Convites expirados processados para agendamento ${agendamento.id}`);
-        }
+  async verificarConvitesExpirados(agora = new Date()) {
+    const agendamentos = await Agendamento.findAll({
+      where: {
+        status: 'enviando_convites',
+        data_convites_enviados: { [Op.not]: null }
       }
+    });
 
-      console.log(` Verificação de convites expirados concluída: ${processados} agendamentos processados`);
-      
-    } catch (error) {
-      console.error(' Erro ao verificar convites expirados:', error);
+    for (const agendamento of agendamentos) {
+      const horasPassadas = (agora - new Date(agendamento.data_convites_enviados)) / (1000 * 60 * 60);
+      if (horasPassadas >= 24) await agendamento.verificarAutoMarcacao();
     }
   }
 }
 
-const lembreteJob = new LembreteJob();
-
-module.exports = lembreteJob;
+module.exports = new LembreteJob();

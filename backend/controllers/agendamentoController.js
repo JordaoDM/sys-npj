@@ -425,6 +425,8 @@ exports.atualizar = async function(req, res) {
         }
 
         const convidadosAntigos = agendamento.convidados || [];
+        const dataInicioAlterada = data_inicio &&
+            new Date(data_inicio).getTime() !== new Date(agendamento.data_inicio).getTime();
 
         await agendamento.update({
             titulo: titulo || agendamento.titulo,
@@ -437,7 +439,11 @@ exports.atualizar = async function(req, res) {
             email_lembrete: email_lembrete !== undefined ? email_lembrete : agendamento.email_lembrete,
             convidados: convidados !== undefined ? convidados : agendamento.convidados,
             observacoes: observacoes !== undefined ? observacoes : agendamento.observacoes,
-            lembrete_enviado: false
+            ...(dataInicioAlterada ? {
+                lembrete_enviado: false,
+                lembrete_dia_enviado: false,
+                lembrete_1h_enviado: false
+            } : {})
         });
 
         if (convidados && Array.isArray(convidados)) {

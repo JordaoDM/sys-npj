@@ -108,86 +108,6 @@ class AgendamentoCronJobs {
     }
   }
   
-  static async enviarLembretesDodia() {
-    try {
-      console.log(' Executando job para lembretes do dia...');
-      
-      const hoje = new Date();
-      const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-      const fimHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
-      
-      const agendamentos = await Agendamento.findAll({
-        where: {
-          status: 'marcado',
-          data_inicio: {
-            [Op.between]: [inicioHoje, fimHoje]
-          }
-        },
-        include: [
-          { model: Processo, as: 'processo' },
-          { 
-            model: Usuario, 
-            as: 'usuario',
-            attributes: ['id', 'nome', 'email', 'role_id', 'ativo']
-          }
-        ]
-      });
-      
-      for (const agendamento of agendamentos) {
-        try {
-          await this.enviarLembreteDodia(agendamento);
-        } catch (emailError) {
-          console.error(`Erro ao enviar lembrete para agendamento ${agendamento.id}:`, emailError);
-        }
-      }
-      
-      console.log(` Lembretes enviados para ${agendamentos.length} agendamentos`);
-    } catch (error) {
-      console.error(' Erro no job de lembretes do dia:', error);
-    }
-  }
-
-  static async enviarLembretes1HoraAntes() {
-    try {
-      console.log(' Executando job para lembretes 1 hora antes...');
-      
-      const agora = new Date();
-      const umaHoraDepois = new Date(agora.getTime() + (60 * 60 * 1000));
-      
-      const agendamentos = await Agendamento.findAll({
-        where: {
-          status: 'marcado',
-          data_inicio: {
-            [Op.between]: [agora, umaHoraDepois]
-          },
-            lembrete_1h_enviado: { [Op.ne]: true }
-        },
-        include: [
-          { model: Processo, as: 'processo' },
-          { 
-            model: Usuario, 
-            as: 'usuario',
-            attributes: ['id', 'nome', 'email', 'role_id', 'ativo']
-          }
-        ]
-      });
-      
-      for (const agendamento of agendamentos) {
-        try {
-          await this.enviarLembrete1HoraAntes(agendamento);
-          agendamento.lembrete_1h_enviado = true;
-          await agendamento.save();
-        } catch (emailError) {
-          console.error(`Erro ao enviar lembrete 1h antes para agendamento ${agendamento.id}:`, emailError);
-        }
-      }
-      
-      console.log(` Lembretes 1h antes enviados para ${agendamentos.length} agendamentos`);
-    } catch (error) {
-      console.error(' Erro no job de lembretes 1h antes:', error);
-    }
-  }
-  
   static async finalizarAgendamentos() {
     try {
       console.log(' Executando job para finalizar agendamentos...');
@@ -234,64 +154,11 @@ class AgendamentoCronJobs {
     return await this.enviarEmailParaTodosParticipantes(agendamento, subject, html);
   }
   
-  static async enviarLembrete1HoraAntes(agendamento) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #dc3545;"> Lembrete Urgente: Agendamento em 1 Hora</h2>
-        <p><strong>Título:</strong> ${agendamento.titulo}</p>
-        <p><strong>Início:</strong> ${new Date(agendamento.data_inicio).toLocaleString('pt-BR')}</p>
-        <p><strong>Término:</strong> ${new Date(agendamento.data_fim).toLocaleString('pt-BR')}</p>
-        <p><strong>Local:</strong> ${agendamento.local || 'Não informado'}</p>
-        
-        <div style="margin: 20px 0; padding: 15px; background-color: #f8d7da; border-left: 4px solid #dc3545;">
-          <p><strong> ATENÇÃO!</strong> Seu agendamento começará em aproximadamente 1 hora. Prepare-se e dirija-se ao local!</p>
-        </div>
-        
-        ${agendamento.processo ? `<p><strong>Processo:</strong> ${agendamento.processo.numero_processo} - ${agendamento.processo.titulo}</p>` : ''}
-        
-        <p style="margin-top: 20px; font-size: 12px; color: #666;">
-          Este é um lembrete automático. Por favor, não responda a este e-mail.
-        </p>
-      </div>
-    `;
-    
-    const subject = ` URGENTE: ${agendamento.titulo} em 1 hora`;
-    return await this.enviarEmailParaTodosParticipantes(agendamento, subject, html);
-  }
-
-  static async enviarLembreteDodia(agendamento) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #ffc107;"> Lembrete: Agendamento Hoje</h2>
-        <p><strong>Título:</strong> ${agendamento.titulo}</p>
-        <p><strong>Horário:</strong> ${new Date(agendamento.data_inicio).toLocaleString('pt-BR')} - ${new Date(agendamento.data_fim).toLocaleString('pt-BR')}</p>
-        <p><strong>Local:</strong> ${agendamento.local || 'Não informado'}</p>
-        
-        <div style="margin: 20px 0; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
-          <p><strong>Não esqueça!</strong> Seu agendamento é hoje. Prepare-se e chegue no horário.</p>
-        </div>
-        
-        ${agendamento.processo ? `<p><strong>Processo:</strong> ${agendamento.processo.numero_processo} - ${agendamento.processo.titulo}</p>` : ''}
-      </div>
-    `;
-    
-    const subject = `Lembrete: ${agendamento.titulo} - Hoje`;
-    return await this.enviarEmailParaTodosParticipantes(agendamento, subject, html);
-  }
-  
   static iniciar() {
     console.log(' Iniciando cron jobs de agendamentos...');
     
     cron.schedule('0 */6 * * *', () => {
       this.marcarAgendamentos();
-    });
-    
-    cron.schedule('0 8 * * *', () => {
-      this.enviarLembretesDodia();
-    });
-    
-    cron.schedule('*/15 * * * *', () => {
-      this.enviarLembretes1HoraAntes();
     });
     
     cron.schedule('0 * * * *', () => {

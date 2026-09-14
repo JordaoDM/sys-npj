@@ -170,6 +170,7 @@ CREATE TABLE `agendamentos` (
 
   `email_lembrete` varchar(255) DEFAULT NULL,
   `lembrete_enviado` tinyint(1) NOT NULL DEFAULT '0',
+  `lembrete_dia_enviado` tinyint(1) NOT NULL DEFAULT '0',
   `criado_por` int NOT NULL,
   `observacoes` text,
 

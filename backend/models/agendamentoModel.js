@@ -547,6 +547,12 @@ Agendamento.init({
     allowNull: false,
     defaultValue: false
   },
+  lembrete_dia_enviado: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    comment: 'Lembrete do dia do agendamento foi enviado'
+  },
   data_convites_enviados: {
     type: DataTypes.DATE,
     allowNull: true,
