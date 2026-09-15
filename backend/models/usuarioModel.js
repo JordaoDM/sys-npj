@@ -11,6 +11,7 @@ class Usuario extends Model {
     
     Usuario.hasMany(models.agendamentoModel, { foreignKey: 'criado_por', as: 'agendamentosCriados' });
     Usuario.hasMany(models.agendamentoModel, { foreignKey: 'aprovado_por', as: 'agendamentosAprovados' });
+    Usuario.hasMany(models.configuracaoLembreteModel, { foreignKey: 'alterado_por', as: 'configuracoesLembretesAlteradas' });
   }
 
   static async usuarioCompleto(id) {

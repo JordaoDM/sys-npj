@@ -13,6 +13,7 @@ const atualizacaoProcessoModel = require('./atualizacaoProcessoModel');
 const usuarioProcessoModel = require('./usuarioProcessoModel');
 const agendamentoModel = require('./agendamentoModel');
 const refreshTokenModel = require('./refreshTokenModel');
+const configuracaoLembreteModel = require('./configuracaoLembreteModel');
 
 const models = {
   roleModel,
@@ -27,6 +28,7 @@ const models = {
   usuarioProcessoModel,
   agendamentoModel,
   refreshTokenModel,
+  configuracaoLembreteModel,
   sequelize,
   Sequelize
 };

@@ -9,7 +9,8 @@ const routeRegistry = [
   ['tabelas-auxiliares', require('./tabelasAuxiliares')],
   ['atualizacoes', require('./atualizacaoProcessoRoute')],
   ['arquivos', require('./arquivoRoute')],
-  ['dashboard', require('./dashboardRoute')]
+  ['dashboard', require('./dashboardRoute')],
+  ['configuracoes', require('./configuracaoRoute')]
 ];
 
 function mountApplicationRoutes(app) {

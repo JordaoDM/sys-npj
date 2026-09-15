@@ -373,6 +373,28 @@ CREATE TABLE `logs_acoes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- ========================================
+-- CONFIGURACAO GLOBAL DE LEMBRETES
+-- ========================================
+
+CREATE TABLE `configuracoes_lembretes` (
+  `id` tinyint unsigned NOT NULL DEFAULT '1',
+  `lembrete_24h_ativo` tinyint(1) NOT NULL DEFAULT '1',
+  `lembrete_dia_ativo` tinyint(1) NOT NULL DEFAULT '1',
+  `horario_lembrete_dia` time NOT NULL DEFAULT '08:00:00',
+  `lembrete_antecipado_ativo` tinyint(1) NOT NULL DEFAULT '1',
+  `antecedencia_minutos` int unsigned NOT NULL DEFAULT '60',
+  `fuso_horario` varchar(64) NOT NULL DEFAULT 'America/Sao_Paulo',
+  `alterado_por` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `chk_configuracoes_lembretes_singleton` CHECK (`id` = 1),
+  CONSTRAINT `configuracoes_lembretes_alterado_por_fk`
+    FOREIGN KEY (`alterado_por`) REFERENCES `usuarios` (`id`)
+    ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ========================================
 -- DADOS INICIAIS
 -- ========================================
 
@@ -382,6 +404,12 @@ VALUES
 (1, 'Admin', NOW(), NOW(), NULL, NULL, 1),
 (2, 'Professor', NOW(), NOW(), NULL, NULL, 1),
 (3, 'Aluno', NOW(), NOW(), NULL, NULL, 1);
+
+INSERT INTO `configuracoes_lembretes`
+(`id`, `lembrete_24h_ativo`, `lembrete_dia_ativo`, `horario_lembrete_dia`,
+ `lembrete_antecipado_ativo`, `antecedencia_minutos`, `fuso_horario`, `alterado_por`)
+VALUES
+(1, 1, 1, '08:00:00', 1, 60, 'America/Sao_Paulo', NULL);
 
 -- Inserir dados básicos de diligencia
 INSERT IGNORE INTO `diligencia` (`id`, `nome`, `createdAt`, `updatedAt`) VALUES
