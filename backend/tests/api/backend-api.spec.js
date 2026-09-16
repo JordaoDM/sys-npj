@@ -313,6 +313,64 @@ describe('Configuração administrativa de lembretes', () => {
     expect(response.body.data.alteradoPor).toMatchObject({ id: admin.id, email: admin.email });
   });
 
+  test('preserva os campos não enviados e persiste a alteração para consultas seguintes', async () => {
+    await request(app).put('/api/configuracoes/lembretes')
+      .set(auth(adminToken))
+      .send({
+        lembrete_24h_ativo: false,
+        lembrete_dia_ativo: true,
+        horario_lembrete_dia: '10:15',
+        lembrete_antecipado_ativo: true,
+        antecedencia_minutos: 75,
+        fuso_horario: 'America/Sao_Paulo'
+      }).expect(200);
+
+    await request(app).put('/api/configuracoes/lembretes')
+      .set(auth(adminToken))
+      .send({ lembrete_dia_ativo: false }).expect(200);
+
+    const consulta = await request(app).get('/api/configuracoes/lembretes')
+      .set(auth(adminToken)).expect(200);
+
+    expect(consulta.body.data).toMatchObject({
+      lembrete_24h_ativo: false,
+      lembrete_dia_ativo: false,
+      horario_lembrete_dia: '10:15:00',
+      lembrete_antecipado_ativo: true,
+      antecedencia_minutos: 75,
+      fuso_horario: 'America/Sao_Paulo',
+      alterado_por: admin.id
+    });
+  });
+
+  test.each([1, 10080])('aceita o limite válido de %i minuto(s) de antecedência', async (limite) => {
+    const response = await request(app).put('/api/configuracoes/lembretes')
+      .set(auth(adminToken))
+      .send({
+        lembrete_24h_ativo: false,
+        lembrete_antecipado_ativo: true,
+        antecedencia_minutos: limite
+      }).expect(200);
+
+    expect(response.body.data.antecedencia_minutos).toBe(limite);
+  });
+
+  test('permite desativar simultaneamente todos os lembretes', async () => {
+    const response = await request(app).put('/api/configuracoes/lembretes')
+      .set(auth(adminToken))
+      .send({
+        lembrete_24h_ativo: false,
+        lembrete_dia_ativo: false,
+        lembrete_antecipado_ativo: false
+      }).expect(200);
+
+    expect(response.body.data).toMatchObject({
+      lembrete_24h_ativo: false,
+      lembrete_dia_ativo: false,
+      lembrete_antecipado_ativo: false
+    });
+  });
+
   test.each([
     [{}, 'payload vazio'],
     [{ campo_desconhecido: true }, 'campo desconhecido'],
@@ -326,17 +384,41 @@ describe('Configuração administrativa de lembretes', () => {
       .set(auth(adminToken)).send(payload).expect(400);
   });
 
-  test('restaura os padrões sem criar outro registro', async () => {
+  test('restaura todos os valores padrão, persiste o resultado e não cria outro registro', async () => {
+    await request(app).put('/api/configuracoes/lembretes')
+      .set(auth(adminToken))
+      .send({
+        lembrete_24h_ativo: false,
+        lembrete_dia_ativo: false,
+        horario_lembrete_dia: '17:45',
+        lembrete_antecipado_ativo: false,
+        antecedencia_minutos: 180,
+        fuso_horario: 'America/Manaus'
+      }).expect(200);
+
     const response = await request(app).post('/api/configuracoes/lembretes/restaurar')
       .set(auth(adminToken)).expect(200);
 
     expect(response.body.data).toMatchObject({
       id: 1,
+      lembrete_24h_ativo: true,
       lembrete_dia_ativo: true,
       horario_lembrete_dia: '08:00:00',
+      lembrete_antecipado_ativo: true,
       antecedencia_minutos: 60,
       fuso_horario: 'America/Sao_Paulo',
       alterado_por: admin.id
+    });
+
+    const consulta = await request(app).get('/api/configuracoes/lembretes')
+      .set(auth(adminToken)).expect(200);
+    expect(consulta.body.data).toMatchObject({
+      lembrete_24h_ativo: true,
+      lembrete_dia_ativo: true,
+      horario_lembrete_dia: '08:00:00',
+      lembrete_antecipado_ativo: true,
+      antecedencia_minutos: 60,
+      fuso_horario: 'America/Sao_Paulo'
     });
     expect(await ConfiguracaoLembrete.count()).toBe(1);
   });
