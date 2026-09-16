@@ -59,6 +59,7 @@ export default function FileUploadForm({ processoId, onUpload }) {
 
     try {
       await arquivoService.uploadArquivo(token, formData);
+      localStorage.setItem("npj:arquivos-atualizados", String(Date.now()));
       toastService.fileUploaded(file.name);
       fileInput.current.value = "";
       if (onUpload) onUpload();

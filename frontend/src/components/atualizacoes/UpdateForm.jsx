@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { atualizacaoProcessoService, arquivoService } from "../../api/services";
 import { useAuthContext } from "../../contexts/AuthContext";
 import { getFileUrl } from "../../utils/fileUrl";
@@ -19,20 +19,34 @@ function UpdateForm({ processoId, onSuccess }) {
   const [novoTipo, setNovoTipo] = useState("");
   const [meusArquivos, setMeusArquivos] = useState([]);
 
-  useEffect(() => {
-    async function fetchArquivos() {
-      try {
-        const data = await arquivoService.listArquivos(token);
-        const arquivosUsuario = user?.id
-          ? data.filter((a) => a.usuario_id === user.id)
-          : data;
-        setMeusArquivos(arquivosUsuario);
-      } catch {
-        setMeusArquivos([]);
-      }
+  const fetchArquivos = useCallback(async () => {
+    try {
+      const data = await arquivoService.listArquivos(token);
+      const arquivosUsuario = user?.id
+        ? data.filter((a) => a.usuario_id === user.id)
+        : data;
+      setMeusArquivos(arquivosUsuario);
+    } catch {
+      setMeusArquivos([]);
     }
-    if (user?.id) fetchArquivos();
-  }, [user, token]);
+  }, [token, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    const atualizarAposUpload = (event) => {
+      if (event.key === "npj:arquivos-atualizados") fetchArquivos();
+    };
+
+    fetchArquivos();
+    window.addEventListener("focus", fetchArquivos);
+    window.addEventListener("storage", atualizarAposUpload);
+
+    return () => {
+      window.removeEventListener("focus", fetchArquivos);
+      window.removeEventListener("storage", atualizarAposUpload);
+    };
+  }, [fetchArquivos, user?.id]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
