@@ -542,6 +542,25 @@ describe('Arquivos', () => {
     await request(app).post('/api/arquivos/upload').set(auth(adminToken)).expect(400);
   });
 
+  test('associa ao processo um arquivo usado em atualização', async () => {
+    const uploaded = await request(app).post('/api/arquivos/upload').set(auth(adminToken))
+      .field('nome', 'Anexo de atualização')
+      .attach('arquivo', Buffer.from('anexo inicialmente sem processo'), 'anexo-atualizacao.txt')
+      .expect(201);
+    const anexoId = uploaded.body.data.id;
+
+    await request(app).post('/api/atualizacoes').set(auth(adminToken)).send({
+      processo_id: processoId,
+      tipo_atualizacao: 'Petição',
+      descricao: 'Atualização com arquivo associado',
+      arquivo_id: anexoId
+    }).expect(201);
+
+    const list = await request(app).get('/api/arquivos').set(auth(adminToken)).expect(200);
+    const arquivoAssociado = list.body.data.find((arquivo) => arquivo.id === anexoId);
+    expect(arquivoAssociado.processo).toMatchObject({ id: processoId });
+  });
+
   test('faz upload, lista, consulta e baixa arquivo vinculado ao processo', async () => {
     const uploaded = await request(app).post('/api/arquivos/upload').set(auth(adminToken))
       .field('processo_id', String(processoId))
@@ -557,6 +576,25 @@ describe('Arquivos', () => {
     const download = await request(app).get(`/api/arquivos/${arquivoId}/download`)
       .set(auth(adminToken)).expect(200);
     expect(download.headers['content-disposition']).toContain('attachment');
+  });
+
+  test('pagina, filtra e ordena arquivos no backend', async () => {
+    const response = await request(app)
+      .get('/api/arquivos?page=1&limit=1&busca=Documento&associacao=associados&tipo=Texto&ordenacao=nome_az')
+      .set(auth(adminToken))
+      .expect(200);
+
+    expect(response.body.data).toMatchObject({
+      currentPage: 1,
+      itemsPerPage: 1,
+      totalPages: 1,
+      totalItems: 1
+    });
+    expect(response.body.data.items).toHaveLength(1);
+    expect(response.body.data.items[0]).toMatchObject({
+      id: arquivoId,
+      nome: 'Documento da API'
+    });
   });
 
   test('impede aluno sem vínculo de anexar ou listar arquivos do processo', async () => {

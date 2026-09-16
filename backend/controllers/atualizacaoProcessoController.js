@@ -1,4 +1,5 @@
 const { Op } = require('sequelize');
+const sequelize = require('../utils/sequelize');
 const {
   atualizacaoProcessoModel: Atualizacao,
   usuarioModel: Usuario,
@@ -40,6 +41,25 @@ async function validarArquivo(arquivoId, processoId, user) {
     return { status: 403, message: 'Sem permissão para vincular este arquivo' };
   }
   return null;
+}
+
+async function associarArquivoAoProcesso(arquivoId, processoId, transaction) {
+  if (!arquivoId) return;
+
+  const [alterados] = await Arquivo.update(
+    { processo_id: processoId },
+    {
+      where: {
+        id: arquivoId,
+        [Op.or]: [{ processo_id: null }, { processo_id: processoId }]
+      },
+      transaction
+    }
+  );
+
+  if (alterados !== 1) {
+    throw new Error('Não foi possível associar o arquivo ao processo');
+  }
 }
 
 exports.listarAtualizacoes = async (req, res) => {
@@ -116,12 +136,17 @@ exports.criarAtualizacao = async (req, res) => {
       return res.status(arquivoError.status).json({ success: false, message: arquivoError.message });
     }
 
-    const criada = await Atualizacao.create({
-      processo_id,
-      usuario_id: req.user.id,
-      tipo_atualizacao: tipo_atualizacao.trim(),
-      descricao: descricao.trim(),
-      arquivos_id: arquivo_id || null
+    const criada = await sequelize.transaction(async (transaction) => {
+      const novaAtualizacao = await Atualizacao.create({
+        processo_id,
+        usuario_id: req.user.id,
+        tipo_atualizacao: tipo_atualizacao.trim(),
+        descricao: descricao.trim(),
+        arquivos_id: arquivo_id || null
+      }, { transaction });
+
+      await associarArquivoAoProcesso(arquivo_id, processo_id, transaction);
+      return novaAtualizacao;
     });
     const atualizacao = await Atualizacao.findByPk(criada.id, { include: includes });
     return res.status(201).json({ success: true, message: 'Atualização cadastrada com sucesso', data: atualizacao });
@@ -151,7 +176,16 @@ exports.atualizarAtualizacao = async (req, res) => {
     if (req.body.tipo_atualizacao !== undefined) dados.tipo_atualizacao = req.body.tipo_atualizacao.trim();
     if (req.body.descricao !== undefined) dados.descricao = req.body.descricao.trim();
     if (req.body.arquivo_id !== undefined) dados.arquivos_id = req.body.arquivo_id || null;
-    await atualizacao.update(dados);
+    await sequelize.transaction(async (transaction) => {
+      await atualizacao.update(dados, { transaction });
+      if (req.body.arquivo_id) {
+        await associarArquivoAoProcesso(
+          req.body.arquivo_id,
+          atualizacao.processo_id,
+          transaction
+        );
+      }
+    });
 
     const atualizada = await Atualizacao.findByPk(atualizacao.id, { include: includes });
     return res.json({ success: true, message: 'Atualização alterada com sucesso', data: atualizada });

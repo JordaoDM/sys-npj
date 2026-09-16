@@ -1,3 +1,5 @@
+const { Op } = require('sequelize');
+
 exports.listarArquivosPorUsuario = async (req, res) => {
   try {
     const { id } = req.params;
@@ -93,7 +95,16 @@ exports.uploadArquivo = async (req, res) => {
 
 exports.listarArquivos = async (req, res) => {
   try {
-    const { processo_id, incluir_inativos } = req.query;
+    const {
+      processo_id,
+      incluir_inativos,
+      page,
+      limit,
+      busca,
+      associacao,
+      tipo,
+      ordenacao
+    } = req.query;
     const processoId = processo_id;
     const userRole = req.user.role;
     const userId = req.user.id;
@@ -116,16 +127,77 @@ exports.listarArquivos = async (req, res) => {
     if (incluir_inativos !== 'true') {
       where.ativo = true;
     }
-    
-    const arquivos = await Arquivo.findAll({
+
+    if (busca) {
+      where.nome = { [Op.like]: `%${String(busca).trim().slice(0, 100)}%` };
+    }
+
+    if (associacao === 'associados') where.processo_id = { [Op.ne]: null };
+    if (associacao === 'nao_associados') where.processo_id = null;
+
+    if (tipo === 'PDF') where.tipo = 'application/pdf';
+    if (tipo === 'Imagem') where.tipo = { [Op.like]: 'image/%' };
+    if (tipo === 'Word') {
+      where.tipo = { [Op.in]: [
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ] };
+    }
+    if (tipo === 'Texto') where.tipo = { [Op.like]: 'text/%' };
+    if (tipo === 'Outros') {
+      where[Op.and] = [
+        { tipo: { [Op.notLike]: 'image/%' } },
+        { tipo: { [Op.ne]: 'application/pdf' } },
+        { tipo: { [Op.notIn]: [
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ] } },
+        { tipo: { [Op.notLike]: 'text/%' } }
+      ];
+    }
+
+    const order = {
+      antigos: [['criado_em', 'ASC']],
+      nome_az: [['nome', 'ASC']],
+      nome_za: [['nome', 'DESC']],
+      processo: [
+        [{ model: Processo, as: 'processo' }, 'numero_processo', 'ASC'],
+        ['nome', 'ASC']
+      ]
+    }[ordenacao] || [['criado_em', 'DESC']];
+
+    const paginacaoAtiva = page !== undefined || limit !== undefined;
+    const paginaAtual = Math.max(parseInt(page, 10) || 1, 1);
+    const itensPorPagina = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+
+    const queryOptions = {
       where,
       include: [
         { model: Usuario, as: 'usuario', attributes: ['nome', 'email'] },
         { model: Processo, as: 'processo', attributes: ['id', 'numero_processo', 'titulo'], required: false }
       ],
-      order: [['criado_em', 'DESC']]
+      order,
+      distinct: true
+    };
+
+    if (paginacaoAtiva) {
+      queryOptions.limit = itensPorPagina;
+      queryOptions.offset = (paginaAtual - 1) * itensPorPagina;
+    }
+
+    if (!paginacaoAtiva) {
+      const arquivos = await Arquivo.findAll(queryOptions);
+      return res.json(arquivos);
+    }
+
+    const { count, rows } = await Arquivo.findAndCountAll(queryOptions);
+    return res.json({
+      items: rows,
+      totalItems: count,
+      totalPages: Math.max(Math.ceil(count / itensPorPagina), 1),
+      currentPage: paginaAtual,
+      itemsPerPage: itensPorPagina
     });
-    res.json(arquivos);
   } catch (error) {
     console.error('Erro ao listar arquivos:', error);
     res.status(500).json({ erro: 'Erro interno do servidor' });

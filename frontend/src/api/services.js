@@ -537,8 +537,13 @@ export const atualizacaoProcessoService = {
 };
 
 export const arquivoService = {
-  listArquivos: async (token) => {
-    const response = await apiRequest("/api/arquivos", {
+  listArquivos: async (token, filtros = null) => {
+    const query = filtros
+      ? `?${new URLSearchParams(
+          Object.entries(filtros).filter(([, valor]) => valor !== undefined && valor !== ""),
+        ).toString()}`
+      : "";
+    const response = await apiRequest(`/api/arquivos${query}`, {
       method: "GET",
       token,
     });
