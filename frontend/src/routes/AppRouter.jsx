@@ -32,6 +32,7 @@ import AceitarConvitePage from "@/pages/convite/AceitarConvitePage";
 import RecusarConvitePage from "@/pages/convite/RecusarConvitePage";
 import ConviteVisualizacao from "@/pages/convite/ConviteVisualizacao";
 import NotFoundPage from "@/pages/NotFoundPage";
+import ConfiguracaoLembretesPage from "@/pages/dashboard/ConfiguracaoLembretesPage";
 import { hasRole } from "@/utils/permissions";
 
 function PrivateRoute({ children, roles }) {
@@ -86,6 +87,14 @@ export default function AppRouter() {
           element={
             <PrivateRoute>
               <ProfilePage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/configuracoes/lembretes"
+          element={
+            <PrivateRoute roles={["Admin"]}>
+              <ConfiguracaoLembretesPage />
             </PrivateRoute>
           }
         />

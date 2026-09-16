@@ -3,9 +3,9 @@ const { Op } = require('sequelize');
 const Agendamento = require('../models/agendamentoModel');
 const Usuario = require('../models/usuarioModel');
 const Processo = require('../models/processoModel');
+const ConfiguracaoLembrete = require('../models/configuracaoLembreteModel');
 const emailService = require('../services/emailService');
-
-const TIMEZONE = process.env.TZ || 'America/Cuiaba';
+const { fromZonedTime, toZonedTime } = require('date-fns-tz');
 
 class LembreteJob {
   constructor() {
@@ -15,11 +15,8 @@ class LembreteJob {
 
   iniciar() {
     console.log(' Iniciando job unificado de lembretes de agendamentos...');
-    this.job = cron.schedule('*/15 * * * *', () => this.executar(), {
-      scheduled: true,
-      timezone: TIMEZONE
-    });
-    console.log(` Job unificado de lembretes iniciado (a cada 15 minutos, fuso ${TIMEZONE})`);
+    this.job = cron.schedule('*/15 * * * *', () => this.executar());
+    console.log(' Job unificado de lembretes iniciado (a cada 15 minutos)');
   }
 
   async executar(agora = new Date()) {
@@ -30,15 +27,39 @@ class LembreteJob {
 
     this.isRunning = true;
     try {
-      await this.enviarLembretes24Horas(agora);
-      await this.enviarLembretesDoDia(agora);
-      await this.enviarLembretes1Hora(agora);
-      await this.verificarConvitesExpirados(agora);
+      try {
+        const configuracao = await this.obterConfiguracao();
+        if (configuracao.lembrete_24h_ativo) {
+          await this.enviarLembretes24Horas(agora);
+        }
+        if (configuracao.lembrete_dia_ativo) {
+          await this.enviarLembretesDoDia(agora, configuracao);
+        }
+        if (configuracao.lembrete_antecipado_ativo) {
+          await this.enviarLembretesAntecipados(agora, configuracao.antecedencia_minutos);
+        }
+      } catch (error) {
+        console.error(' Configuração de lembretes indisponível; envios ignorados neste ciclo:', error.message);
+      }
+
+      try {
+        await this.verificarConvitesExpirados(agora);
+      } catch (error) {
+        console.error(' Erro ao verificar convites expirados:', error.message);
+      }
     } catch (error) {
       console.error(' Erro geral no job unificado de lembretes:', error);
     } finally {
       this.isRunning = false;
     }
+  }
+
+  async obterConfiguracao() {
+    const [configuracao] = await ConfiguracaoLembrete.findOrCreate({
+      where: { id: 1 },
+      defaults: ConfiguracaoLembrete.padrao
+    });
+    return configuracao.get ? configuracao.get({ plain: true }) : configuracao;
   }
 
   includesParticipantes() {
@@ -106,20 +127,33 @@ class LembreteJob {
     }, 'lembrete_enviado', 'lembrete de 24 horas');
   }
 
-  async enviarLembretesDoDia(agora = new Date()) {
-    if (agora.getHours() !== 8) return;
-    const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-    const fimHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59, 999);
+  async enviarLembretesDoDia(agora = new Date(), configuracao = ConfiguracaoLembrete.padrao) {
+    const fuso = configuracao.fuso_horario;
+    const agoraNoFuso = toZonedTime(agora, fuso);
+    const [hora, minuto] = String(configuracao.horario_lembrete_dia).split(':').map(Number);
+    const minutosAgora = agoraNoFuso.getHours() * 60 + agoraNoFuso.getMinutes();
+    const minutosConfigurados = hora * 60 + minuto;
+    if (minutosAgora < minutosConfigurados) return;
+
+    const inicioLocal = new Date(
+      agoraNoFuso.getFullYear(), agoraNoFuso.getMonth(), agoraNoFuso.getDate(), 0, 0, 0, 0
+    );
+    const fimLocal = new Date(
+      agoraNoFuso.getFullYear(), agoraNoFuso.getMonth(), agoraNoFuso.getDate(), 23, 59, 59, 999
+    );
+    const inicioHoje = fromZonedTime(inicioLocal, fuso);
+    const fimHoje = fromZonedTime(fimLocal, fuso);
+    const inicioConsulta = agora > inicioHoje ? agora : inicioHoje;
     await this.processarAgendamentos({
-      data_inicio: { [Op.between]: [inicioHoje, fimHoje] }
+      data_inicio: { [Op.between]: [inicioConsulta, fimHoje] }
     }, 'lembrete_dia_enviado', 'lembrete do dia');
   }
 
-  async enviarLembretes1Hora(agora = new Date()) {
-    const limite = new Date(agora.getTime() + 60 * 60 * 1000);
+  async enviarLembretesAntecipados(agora = new Date(), antecedenciaMinutos = 60) {
+    const limite = new Date(agora.getTime() + Number(antecedenciaMinutos) * 60 * 1000);
     await this.processarAgendamentos({
       data_inicio: { [Op.between]: [agora, limite] }
-    }, 'lembrete_1h_enviado', 'lembrete de 1 hora');
+    }, 'lembrete_1h_enviado', `lembrete de ${antecedenciaMinutos} minutos`);
   }
 
   async testarManual(agora = new Date()) {

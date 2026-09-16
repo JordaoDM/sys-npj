@@ -375,6 +375,24 @@ export const agendamentoService = {
 
 };
 
+export const configuracaoLembreteService = {
+  obter: async (token) => apiRequest('/api/configuracoes/lembretes', {
+    method: 'GET',
+    token,
+  }),
+
+  atualizar: async (token, configuracao) => apiRequest('/api/configuracoes/lembretes', {
+    method: 'PUT',
+    token,
+    body: configuracao,
+  }),
+
+  restaurarPadrao: async (token) => apiRequest('/api/configuracoes/lembretes/restaurar', {
+    method: 'POST',
+    token,
+  }),
+};
+
 export const tabelaAuxiliarService = {
   getMateriaAssunto: async (token) => {
     const response = await apiRequest("/api/tabelas-auxiliares/materias", {

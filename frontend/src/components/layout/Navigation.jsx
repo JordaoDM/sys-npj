@@ -37,6 +37,11 @@ const Navigation = () => {
     },
     { path: "/usuarios", label: "Usuários", roles: ["Admin", "Professor"] },
     {
+      path: "/configuracoes/lembretes",
+      label: "Configurações",
+      roles: ["Admin"],
+    },
+    {
       path: "/profile",
       label: "Perfil",
       roles: ["Admin", "Professor", "Aluno"],
