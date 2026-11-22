@@ -23,7 +23,7 @@ function normalizeBrazilianText(text) {
 
   const commonCorrections = [
     { from: /Cvel/gi, to: 'Cível' },
-    { from: /Cuiab/gi, to: 'Cuiabá' },
+    { from: /\bCuiab[aá]\b/gi, to: 'Cuiabá' },
     { from: /Infncia/gi, to: 'Infância' },
     { from: /Violncia/gi, to: 'Violência' },
     { from: /Domstica/gi, to: 'Doméstica' },
