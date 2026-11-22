@@ -94,7 +94,10 @@ exports.listarAtualizacoes = async (req, res) => {
     const atualizacoes = await Atualizacao.findAll({
       where,
       include: includes,
-      order: [['data_atualizacao', 'DESC']]
+      order: [
+        ['data_atualizacao', 'DESC'],
+        ['id', 'DESC']
+      ]
     });
 
     return res.json({ success: true, data: atualizacoes });

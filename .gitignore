@@ -22,6 +22,20 @@ logs/
 # Arquivos temporários
 tmp/
 temp/
+.tmp-chrome-capture/
+.tmp-cdp/
+
+# Documentação e materiais de demonstração locais
+docs/
+screenshots/
+video-assets/
+tools/build_api_docx.py
+
+# Roteiros Cypress usados somente para gerar capturas do TCC
+frontend/cypress/e2e/captura-painel-aluno.cy.js
+frontend/cypress/e2e/captura-painel-professor.cy.js
+frontend/cypress/e2e/capturas-recuperacao-senha.cy.js
+frontend/cypress/e2e/capturas-tcc.cy.js
 
 # Uploads
 uploads/

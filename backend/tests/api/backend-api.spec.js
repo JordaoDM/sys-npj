@@ -6,7 +6,9 @@ const app = require('../../index');
 const sequelize = require('../../utils/sequelize');
 const {
   usuarioModel: Usuario,
-  configuracaoLembreteModel: ConfiguracaoLembrete
+  configuracaoLembreteModel: ConfiguracaoLembrete,
+  atualizacaoProcessoModel: AtualizacaoProcesso,
+  localTramitacaoModel: LocalTramitacao
 } = require('../../models/indexModel');
 const { getJwtSecret } = require('../../config/secrets');
 
@@ -451,6 +453,26 @@ describe('Processos, vínculos e histórico', () => {
     expect(updated.body.data.titulo).toBe('Processo de Integração Editado');
   });
 
+  test('registra os nomes dos locais de tramitação no histórico', async () => {
+    const locais = await LocalTramitacao.findAll({ order: [['id', 'ASC']], limit: 2 });
+    expect(locais).toHaveLength(2);
+
+    await request(app).put(`/api/processos/${processoId}`).set(auth(adminToken))
+      .send({ local_tramitacao_id: locais[0].id }).expect(200);
+    await request(app).put(`/api/processos/${processoId}`).set(auth(adminToken))
+      .send({ local_tramitacao_id: locais[1].id }).expect(200);
+
+    const historico = await request(app).get(`/api/atualizacoes?processo_id=${processoId}`)
+      .set(auth(adminToken)).expect(200);
+    const edicaoLocal = historico.body.data.find((item) =>
+      item.tipo_atualizacao === 'Edição do Processo' &&
+      item.descricao.includes('Local de Tramitação')
+    );
+
+    expect(edicaoLocal.descricao).toContain(`Local de Tramitação: "${locais[0].nome}" → "${locais[1].nome}"`);
+    expect(edicaoLocal.descricao).not.toMatch(/Local de Tramitação: "\d+"/);
+  });
+
   test('vincula e desvincula usuário, respeitando validações', async () => {
     const payload = { processo_id: processoId, usuario_id: aluno.id, role: 'Aluno' };
     await request(app).post(`/api/processos/${processoId}/vincular-usuario`)
@@ -484,6 +506,38 @@ describe('Processos, vínculos e histórico', () => {
     atualizacaoId = list.body.data[0].id;
     const detail = await request(app).get(`/api/atualizacoes/${atualizacaoId}`).set(auth(adminToken)).expect(200);
     expect(detail.body.data.processo_id).toBe(processoId);
+  });
+
+  test('ordena o histórico por data e desempata pelo ID mais recente', async () => {
+    const mesmoInstante = new Date('2026-01-15T12:00:00.000Z');
+    const primeira = await AtualizacaoProcesso.create({
+      usuario_id: admin.id,
+      processo_id: processoId,
+      data_atualizacao: mesmoInstante,
+      tipo_atualizacao: 'Teste de ordenação',
+      descricao: 'Primeira atualização no mesmo instante'
+    });
+    const segunda = await AtualizacaoProcesso.create({
+      usuario_id: admin.id,
+      processo_id: processoId,
+      data_atualizacao: mesmoInstante,
+      tipo_atualizacao: 'Teste de ordenação',
+      descricao: 'Segunda atualização no mesmo instante'
+    });
+
+    try {
+      const list = await request(app).get(`/api/atualizacoes?processo_id=${processoId}`)
+        .set(auth(adminToken)).expect(200);
+      const idsListados = list.body.data.map((item) => item.id);
+      expect(idsListados.indexOf(segunda.id)).toBeLessThan(idsListados.indexOf(primeira.id));
+
+      const detail = await request(app).get(`/api/processos/${processoId}/detalhes`)
+        .set(auth(adminToken)).expect(200);
+      const idsNosDetalhes = detail.body.data.atualizacoes.map((item) => item.id);
+      expect(idsNosDetalhes.indexOf(segunda.id)).toBeLessThan(idsNosDetalhes.indexOf(primeira.id));
+    } finally {
+      await AtualizacaoProcesso.destroy({ where: { id: [primeira.id, segunda.id] } });
+    }
   });
 
   test('cria, edita e exclui uma atualização manual com campos canônicos', async () => {

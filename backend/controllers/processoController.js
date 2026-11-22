@@ -52,14 +52,17 @@ exports.obterProcessoDetalhes = async (req, res) => {
           { 
             model: AtualizacaoProcesso, 
             as: 'atualizacoes',
-            include: [{ model: Usuario, as: 'usuario' }],
-            order: [['data_atualizacao', 'DESC']]
+            include: [{ model: Usuario, as: 'usuario' }]
           },
           { model: Arquivo, as: 'arquivos' },
           { model: MateriaAssunto, as: 'materiaAssunto' },
           { model: Fase, as: 'fase' },
           { model: Diligencia, as: 'diligencia' },
           { model: LocalTramitacao, as: 'localTramitacao' }
+        ],
+        order: [
+          [{ model: AtualizacaoProcesso, as: 'atualizacoes' }, 'data_atualizacao', 'DESC'],
+          [{ model: AtualizacaoProcesso, as: 'atualizacoes' }, 'id', 'DESC']
         ]
       });
 
@@ -271,7 +274,11 @@ exports.atualizarProcesso = async (req, res) => {
     if (isDbAvailable()) {
       const { 
         processoModel: Processo, 
-        atualizacaoProcessoModel: AtualizacaoProcesso 
+        atualizacaoProcessoModel: AtualizacaoProcesso,
+        materiaAssuntoModel: MateriaAssunto,
+        faseModel: Fase,
+        diligenciaModel: Diligencia,
+        localTramitacaoModel: LocalTramitacao
       } = require('../models/indexModel');
       
       const processo = await Processo.findByPk(id);
@@ -280,6 +287,32 @@ exports.atualizarProcesso = async (req, res) => {
       }
       
       const valoresAntigos = processo.toJSON();
+      const referenciasAuxiliares = {
+        materia_assunto_id: MateriaAssunto,
+        fase_id: Fase,
+        diligencia_id: Diligencia,
+        local_tramitacao_id: LocalTramitacao
+      };
+      const valoresAuxiliaresHistorico = {};
+
+      await Promise.all(Object.entries(referenciasAuxiliares).map(async ([campo, Modelo]) => {
+        if (!Object.prototype.hasOwnProperty.call(dadosAtualizacao, campo) ||
+            valoresAntigos[campo] === dadosAtualizacao[campo]) {
+          return;
+        }
+
+        const buscarNome = async (valor) => {
+          if (valor === null || valor === undefined || valor === '') return 'Não definido';
+          const registro = await Modelo.findByPk(valor, { attributes: ['nome'] });
+          return registro?.nome || String(valor);
+        };
+
+        const [valorAntigo, valorNovo] = await Promise.all([
+          buscarNome(valoresAntigos[campo]),
+          buscarNome(dadosAtualizacao[campo])
+        ]);
+        valoresAuxiliaresHistorico[campo] = { valorAntigo, valorNovo };
+      }));
       
       try {
         await processo.update(dadosAtualizacao);
@@ -315,8 +348,9 @@ exports.atualizarProcesso = async (req, res) => {
       for (const [campo, label] of Object.entries(camposMonitorados)) {
         if (dadosAtualizacao.hasOwnProperty(campo) && 
             valoresAntigos[campo] !== dadosAtualizacao[campo]) {
-          const valorAntigo = valoresAntigos[campo] || 'Não definido';
-          const valorNovo = dadosAtualizacao[campo] || 'Não definido';
+          const valoresAuxiliares = valoresAuxiliaresHistorico[campo];
+          const valorAntigo = valoresAuxiliares?.valorAntigo ?? valoresAntigos[campo] ?? 'Não definido';
+          const valorNovo = valoresAuxiliares?.valorNovo ?? dadosAtualizacao[campo] ?? 'Não definido';
           alteracoes.push(`${label}: "${valorAntigo}" → "${valorNovo}"`);
         }
       }

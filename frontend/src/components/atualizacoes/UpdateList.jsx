@@ -18,13 +18,21 @@ function formatDescricao(descricao, auxData) {
   if (!descricao) {
     return "";
   }
+  const legacyLabels = {
+    "Matéria/Assunto": "materia_assunto_id",
+    Fase: "fase_id",
+    Diligência: "diligencia_id",
+    "Local de Tramitação": "local_tramitacao_id",
+  };
+
   return descricao.replace(
-    /([a-zA-Z_]+): '?([\d]+)'? *→ *'?([\d]+)'?/g,
-    function (match, field, from, to) {
-      const label = FIELD_LABELS[field] || field;
+    /(materia_assunto_id|fase_id|diligencia_id|local_tramitacao_id|Matéria\/Assunto|Fase|Diligência|Local de Tramitação):\s*["']?(\d+)["']?\s*→\s*["']?(\d+)["']?/g,
+    function (match, fieldOrLabel, from, to) {
+      const field = legacyLabels[fieldOrLabel] || fieldOrLabel;
+      const label = FIELD_LABELS[field] || fieldOrLabel;
       const fromName = getFieldDisplayValue(field, from, auxData);
       const toName = getFieldDisplayValue(field, to, auxData);
-      return `${label}: '${fromName}' → '${toName}'`;
+      return `${label}: "${fromName}" → "${toName}"`;
     },
   );
 }
@@ -98,7 +106,7 @@ export default function UpdateList({
         {updates.map((upd) => (
           <li key={upd.id}>
             {upd.tipo_atualizacao && <b>[{upd.tipo_atualizacao}] </b>}
-            <span>{upd.descricao}</span>
+            <span>{formatDescricao(upd.descricao, auxData)}</span>
             {upd.arquivo?.caminho && (
               <>
                 <br />
